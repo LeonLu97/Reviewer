@@ -1,0 +1,38 @@
+mysql解锁
+(1)eappmysql -ueltedbm -peLTE@com234
+(2)mysql> update mysql.user set Grant_priv='Y' where User='eltedbm';
+(3)vi /etc/eapp3307/my.cnf 用#号注释掉127.0.0.1这一行
+(4)service eappmysql restart
+
+(5)eappmysql -ueltedbm -peLTE@com234
+(6)mysql> grant all privileges on *.* to odb_user identified by 'eLTE@com123' with grant option;
+(6)mysql> flush privileges;
+
+MYSQL 解锁再发一次，大家记录一下，不要太依赖工具了哦。
+
+
+
+
+
+
+
+
+4.0 解库方法
+eappmysql 改为  mysql
+
+3307 改为3306
+
+etc/eapp3307/ 改为 /etc
+
+
+
+
+
+
+
+
+
+mysql -ueltedbm -peLTE@com234
+update mysql.user set Grant_priv='Y' where User='eltedbm';
+vi /etc/my.cnf
+service mysql restart
