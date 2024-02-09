@@ -1,0 +1,154 @@
+
+
+
+
+EBS系统设计说明书
+
+
+
+
+
+
+
+目录
+目录	2
+1、描述	3
+2、场景	3
+3、消息流程	6
+3.1 数据设计	6
+3.1.1部门参数	6
+3.1.2数据库与表	7
+3.1.3配置对象	10
+3.2 基本操作	11
+3.2.1添加/编辑	11
+3.2.2数据入库	13
+3.2.3删除/批量删除	15
+3.2.4数据导出	17
+
+
+
+1、描述
+在开户过程中，可以为终端、卡、群组、用户和模板配置部门属性；
+只有opusers角色用户、vpnsystemadmins角色用户、vpnadmins角色用户和deptadmins角色用户可以创建部门；
+部门层级最多为五级，全网部门的数量最多为4000；
+用户配置部门后，可以按照部门层级对用户进行分级管理。
+
+2、场景
+登录eUDC660管理系统后，选择“开户 > 部门管理 > 部门”，进入“部门”界面，如下图所示。可对该用户进行添加、编辑、删除部门和导出等操作。
+添加部门后，相应界面左侧会显示部门树。用户可在此查看部门节点，以及查询某一部门的开户数据。对于VPN系统管理员，部门树上会显示VPN节点和部门节点；对于opusers角色用户，部门树上会显示子网节点（父节点99999999）和部门节点；对于其他用户，部门树上仅会显示部门节点。
+ 
+
+页面action类入口为clickTreeNode()。
+ 
+3、消息流程
+3.1 数据设计
+3.1.1部门参数
+参数名称	参数值	参数说明
+VPN索引（*），说明： 使用有权限的vpnsystemadmins角色用户登录eUDC660管理系统时，需配置该参数。	从已配置的VPN中选择。	该参数默认为0，表示该配置被有权限vpnsystemadmins角色用户直接管理，不归属某一个VPN。
+子网ID，说明： 当系统中存在多个子网时，需要设置该参数。	从已配置的子网中选择。默认值：本子网的ID	部门所属的子网。
+部门名称（*）	不包含中英文逗号、单引号、双引号、分号、&符号、/符号、\符号、<符号、>符号，及连续空格和连续百分号，长度不超过255个字节，系统采用UTF-8编码格式，3个字节对应1个中文字	必配。同级部门名称不能重复。
+部门编号（*）	1～18位自然数	用于标识部门。如果不配置该参数，系统将自动生成部门编号。
+上级部门	从已配置的部门中选择。	可选，如果部门所属层级为一级，配置为空；如果部门所属层级不是一级，需指定直接的上级部门。
+3.1.2数据库与表
+1）数据库：ebs
+2）部门表（opm_department）：
+ 
+与终端用户模板表（opm_sipusertemp）、固定用户模板表（opm_pttusertemp）存在一对多的映射关系。
+3）建立对象与表关联
+在opm-starter进程的opm.hbm.xml文件中建立实体类与数据库表的映射关系，如下图所示：
+<class name="com.shjv.tdscdma.ebs.bean.udc.UDCDepartment"
+       table="opm_department"
+       lazy="false"
+       dynamic-insert="true"
+       dynamic-update="true">
+  <id name="id"
+      type="long">
+    <column name="id" />
+    <generator class="native" />
+  </id>
+  <property name="label"
+            column="label"
+            type="string" />
+  <property name="vpnID"
+            column="vpnID"
+            type="int" />
+  <property name="super_dept_id"
+            column="super_dept_id"
+            type="int" />
+  <property name="complete_label"
+            column="complete_label"
+            type="string" />
+  <property name="deptID"
+            column="deptID"
+            type="int" />
+  <property name="deptCode"
+            column="deptCode"
+            type="string" />
+  <property name="subNetInternalId"
+            column="subnet_internal_id"
+            type="int" />
+  <set name="sipUserTempSet"
+       lazy="false"
+       cascade="none">
+    <key column="DEPARTMENT_ID" />
+    <one-to-many class="com.shjv.tdscdma.ebs.bean.udc.UDCIPUserTemp" />
+  </set>
+  <set name="pttUserTempSet"
+       lazy="false"
+       cascade="none">
+    <key column="DEPARTMENT_ID" />
+    <one-to-many class="com.shjv.tdscdma.ebs.bean.udc.UDCPttUserTemp" />
+  </set>
+</class>
+3.1.3配置对象
+1）对象类
+基本说明：新增一项配置，涉及增删查改的操作对象，贯穿所有主流程使用，继承EBSDomainObject；（参数生成get、set方法、序列化serialVersionUID、生成toString方法，例如UDCDepartment.java）
+2）action类
+基本说明：action中，包括增删查改以及必要的url跳转方法；（继承BaseAdminAction、序列化serialVersionUID、添加必要的前台交互参数、交互参数需生成get、set方法，例如：EbsDepartmentAction.java）
+3）url的权限
+在omc-web-ebsclient进程的applicationContext-security.xml和UdcSecurityMeta.xml文件中进行url的权限配置。
+<!-- 部门管理权限_部门 -->
+   <intercept-url pattern="/frame/ebs_department!list.action" access="DEPARTMENT_QUERY"/>
+
+<!--部门管理权限_部门 -->  
+<UdcSecurityItem urlPattern="/frame/ebs_department!edit.action"
+                 access="DEPARTMENT_QUERY"
+                 licItem=""
+                 isCheckToken="1" />
+
+3.2 基本操作
+3.2.1添加/编辑
+对于opusers角色用户开户的数据，VPN索引默认为65535，且不可更改。
+ 
+程序入口：
+EbsDepartmentAction
+代码逻辑toAdd()：
+（1）如果部门信息为空，创建一个新的部门对象；
+（2）设置内部子网id为-1，且根据内部子网id获取子网关系类型；
+（3）设置该部门的vpnid为clickedDeptVpnId，若clickedDeptVpnId为空，则设置为登录用户的vpnid；
+（4）当前选中的部门做为新增部门的“上级部门”，以"deptID"传入，获取该上级部门信息，如果上级部门信息为空，则设置当前部门vpnid为登录用户的vpnid，反之为上级部门的vpnid，设置当前部门的部门编号。
+代码逻辑edit()：
+（1）通过id查询该UDCDepartment对象的一条部门信息，判断如果为空的话，提示错误信息并返回；
+（2）通过deptID查询该UDCDepartment对象的一条部门信息，若为空，设置super_dept为空和super_dept_id为0，否则设置为上级部门的名称和部门id；
+（3）如果内部子网id不为空，根据内部子网id获取子网关系类型。
+3.2.2数据入库
+核心方法为operateOneCommandDB（EBSType ebsType, OperationEnum optType, EBSDomainObject obj, List<ParameterBean> notfiyBeanList）。
+ 
+ 
+3.2.3删除/批量删除
+删除部门时，如果存在与该部门相关的资源，则不允许删除，如终端、卡、用户和开户模板配置的部门属性。
+ 
+程序入口：
+ 
+核心操作是operateOneCommandDB（EBSType ebsType, OperationEnum optType, EBSDomainObject obj, List<ParameterBean> notfiyBeanList）。
+3.2.4数据导出
+ 
+程序入口：
+ 
+
+核心方法是exportToServer(String templateName, Map<Object, Object> rootMap)。
+ 
+
+
+
+
